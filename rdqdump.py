@@ -6,6 +6,7 @@
 #
 # Contributors:
 # Jeff Bryner jbryner@mozilla.com/jeff@jeffbryner.com
+# Lerit Nuksawn lerit.ns@gmail.com
 #
 # Parser for rabbitmq .rdq files that attempts
 # to find record delimeters, record length and
@@ -40,7 +41,7 @@ def hexbytes(xs, group_size=1, byte_separator=' ', group_separator=' '):
     else:
         r = len(xs) % group_size
         s = group_separator.join(
-            [byte_separator.join('%02X' % (ordc(x)) for x in group) for group in zip(*[iter(xs)]*group_size)]
+            [byte_separator.join('%02X' % (ordc(x)) for x in group) for group in zip(*[iter(xs)] * group_size)]
         )
         if r > 0:
             s += group_separator + byte_separator.join(['%02X' % (ordc(x)) for x in xs[-r:]])
@@ -97,28 +98,29 @@ if __name__ == '__main__':
     # record length and outputing the record to stdout
     #
     parser = OptionParser()
-    parser.add_option("-b", dest='bytes'  , default=16, type="int", help="number of bytes to show per line")
-    parser.add_option("-s", dest='start' , default=0, type="int", help="starting byte")
-    parser.add_option("-l", dest='length' , default=16, type="int", help="length in bytes to dump")
-    parser.add_option("-r", dest='chunk' , default=1024, type="int", help="length in bytes to read at a time")
-    parser.add_option("-f", dest='input', default="",help="input: filename")
-    parser.add_option("-t", dest='text', default="",help="text string to search for")
+    parser.add_option("-b", dest='bytes', default=16, type="int", help="number of bytes to show per line")
+    parser.add_option("-s", dest='start', default=0, type="int", help="starting byte")
+    parser.add_option("-l", dest='length', default=16, type="int", help="length in bytes to dump")
+    parser.add_option("-r", dest='chunk', default=1024, type="int", help="length in bytes to read at a time")
+    parser.add_option("-f", dest='input', default="", help="input: filename")
+    parser.add_option("-t", dest='text', default="", help="text string to search for")
     parser.add_option("-o", dest='output', help="output: filename")
 
     # this hex value worked for me, might work for you
     # to delimit the entries in a rabbitmq .rdq file
-    parser.add_option("-x", dest='hex', default="395f316c000000016d0000",help="hex string to search for")
-    parser.add_option("-c", dest='count', default=1 ,type="int",help="count of hits to find before stopping (0 for don't stop)")
-    parser.add_option("-d", "--debug",action="store_true", dest="debug", default=False, help="turn on debugging output")
-    parser.add_option("-z", "--zero",action="store_true", dest="zero", default=False,help="when printing output, count from zero rather than position hit was found")
+    parser.add_option("-x", dest='hex', default="395f316c000000016d0000", help="hex string to search for queue message")
+    parser.add_option("-q", "--hexq", dest='hexq', default="000000006C000000016D000000", help="hex string to search for queue name")
+    parser.add_option("-c", dest='count', default=1, type="int", help="count of hits to find before stopping (0 for don't stop)")
+    parser.add_option("-d", "--debug", action="store_true", dest="debug", default=False, help="turn on debugging output")
+    parser.add_option("-z", "--zero", action="store_true", dest="zero", default=False, help="when printing output, count from zero rather than position hit was found")
 
     (options,args) = parser.parse_args()
 
 
     if os.path.exists(options.input):
-        src=open(options.input,'rb')
+        src = open(options.input, 'rb')
         #if the file is smaller than our chunksize, reset.
-        options.chunk=min(os.path.getsize(options.input),options.chunk)
+        options.chunk = min(os.path.getsize(options.input), options.chunk)
     else:
         sys.stderr.write(options.input)
         sys.stderr.write("No input file specified\n")
@@ -130,57 +132,102 @@ if __name__ == '__main__':
     else:
         output = False
 
-    searchSize=max(len(options.text),len(options.hex)/2)
-    data=readChunk(src,options.start,options.chunk)
+    searchSize = max(len(options.text), len(options.hex) / 2)
+    data = readChunk(src,options.start,options.chunk)
     if options.debug:
         print("[*] position: %d"%(src.tell()))
-    count=0
-    while data:
+    count = 0
 
-        if len(options.hex)>0 and options.hex.upper() in convert_hex(data):
-            #where is the string in this chunk of data
-            hexdata=convert_hex(data)
-            dataPos=hexdata.find(options.hex.upper())/2
-            #where is the string in the file
-            dataAddress=(max(0,(src.tell()-options.chunk))+dataPos)
-            #what do we print in the hexoutput
-            printAddress=dataAddress
+    queue_name = None
+    queue_message = None
+
+    while data:
+        print("")
+        print("")
+        print(data)
+        print(convert_hex(data))
+        if len(options.hexq) > 0 and options.hexq.upper() in convert_hex(data):
+            # print(data)
+            hexdata = convert_hex(data)
+            dataPos = hexdata.find(options.hexq.upper()) / 2
+            dataAddress = (max(0, (src.tell() - options.chunk)) + dataPos)
+            printAddress = dataAddress
             if options.zero:
                 #used to carve out a portion of a stream and save it via xxd -r
-                printAddress=0
+                printAddress = 0
+            #set the length
+            recordSize = readChunk(src, dataAddress + len(options.hexq) / 2, 1)
+            rdqEntryLength = int(convert_hex(recordSize), 16)
+            # print('length queue name ===>', rdqEntryLength)
+            options.length = rdqEntryLength
+            data = readChunk(src, dataAddress + len(options.hexq) / 2 + 1, options.length)
+            unescapedData = data.decode('ascii', 'ignore')
+
+            # print(unescapedData)
+
+            queue_name = unescapedData
+
+            if options.debug:
+                print(hexdump(data, byte_separator='', group_size=2, group_separator=' ', printable_separator='  ', address=printAddress, line_size=16, address_format='%f'))
+
+        if len(options.hex) > 0 and options.hex.upper() in convert_hex(data):
+            #where is the string in this chunk of data
+            hexdata = convert_hex(data)
+            dataPos = hexdata.find(options.hex.upper()) / 2
+            #where is the string in the file
+            dataAddress = (max(0, (src.tell() - options.chunk)) + dataPos)
+            #what do we print in the hexoutput
+            printAddress = dataAddress
+            if options.zero:
+                #used to carve out a portion of a stream and save it via xxd -r
+                printAddress = 0
 
             #set the length
             recordSize = readChunk(src, dataAddress + len(options.hex)/2,  2)
             rdqEntryLength = int(convert_hex(recordSize), 16)
+            # print('length content ===>', rdqEntryLength)
             # print('rdqEntryLength:', rdqEntryLength)
             options.length = rdqEntryLength
 
             # backup, get the chunk of data requested starting at the search hit.
             # plus the hex search + the record length
-            data=readChunk(src,dataAddress + len(options.hex)/2 + 2,options.length)
+            data = readChunk(src,dataAddress + len(options.hex)/2 + 2, options.length)
             unescapedData = data.decode('ascii', 'ignore')
-            try:
-                if output:
-                    with open(output_file, "a") as out_file:
-                        out_file.write(json.loads(unescapedData)+'\n')
-                else:
-                    sys.stdout.write(json.loads(unescapedData)+'\n')
 
-            except Exception as e:
-                if output:
-                    with open(output_file, "a") as out_file:
-                        out_file.write(unescapedData + '\n')
-                else:
-                    sys.stderr.write(unescapedData + '\n')
-                pass
+            queue_message = unescapedData
+
+            # try:
+            #     if output:
+            #         with open(output_file, "a") as out_file:
+            #             out_file.write(json.loads(unescapedData) + '\n')
+            #     else:
+            #         # sys.stdout.write(json.loads(unescapedData) + '\n')
+            #         pass
+
+            # except Exception as e:
+            #     if output:
+            #         with open(output_file, "a") as out_file:
+            #             out_file.write(unescapedData + '\n')
+            #     else:
+            #         sys.stderr.write(unescapedData + '\n')
+            #     pass
             if options.debug:
-                print(hexdump(data, byte_separator='', group_size=2, group_separator=' ', printable_separator='  ', address=printAddress, line_size=16,address_format='%07X'))
-            count+=1
+                print(hexdump(data, byte_separator='', group_size=2, group_separator=' ', printable_separator='  ', address=printAddress, line_size=16, address_format='%f'))
+            count += 1
 
-        if options.count != 0 and options.count<=count:
+        if queue_message is not None:
+            if queue_name is None:
+                raise Exception("ERROR, QUEUE NAME NOT FOUND FOR QUEUE MESSAGE")
+            print("")
+            print("==============================================================================")
+            print("")
+            # print(queue_name, queue_message)
+            queue_name = None
+            queue_message = None
+
+        if options.count != 0 and options.count <= count:
             sys.exit()
         else:
-
-            data=readChunk(src,src.tell(),options.chunk)
+            data = readChunk(src,src.tell(), options.chunk)
             if options.debug:
                 print("[*] position: %d"%(src.tell()))
