@@ -227,4 +227,4 @@ if __name__ == '__main__':
         else:
             data = read_chunk(src,src.tell(), chunk_size)
             if options.debug:
-                print("[*] position: %d"%(src.tell()))
+                print("[*] position: %d" % (src.tell()))
