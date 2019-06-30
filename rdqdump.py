@@ -150,7 +150,7 @@ if __name__ == '__main__':
     # this hex value worked for me, might work for you
     # to delimit the entries in a rabbitmq .rdq file
     parser.add_option("-x", dest='hex', default="395f316c000000016d0000", help="hex string to search for queue message")
-    parser.add_option("-q", "--hex_queue", dest='hex_queue', default="000000006C000000016D000000", help="hex string to search for queue name")
+    parser.add_option("-q", "--hex_queue", dest='hex_queue', default="65786368616E67656D000000006C000000016D000000,000865786368616E67656D000000", help="hex string to search for queue name")
     parser.add_option("-c", dest='count', default=1, type="int", help="count of hits to find before stopping (0 for don't stop)")
     parser.add_option("-d", "--debug", action="store_true", dest="debug", default=False, help="turn on debugging output")
     parser.add_option("-z", "--zero", action="store_true", dest="zero", default=False, help="when printing output, count from zero rather than position hit was found")
@@ -180,26 +180,30 @@ if __name__ == '__main__':
     queue_name = None
     queue_message = None
 
-    queue_name_indicator_hex = options.hex_queue
+    queue_name_indicator_hex = options.hex_queue.split(',')
     queue_message_indicator_hex = options.hex
 
     while data:
         # print("")
-        # print("")
         # print(data)
         # print(convert_hex(data))
         
-        if len(queue_name_indicator_hex) > 0 and queue_name_indicator_hex.upper() in convert_hex(data):
-            (data, queue_name) = extract_unescaped_content(
-                src=src,
-                data=data,
-                hex_bytes=queue_name_indicator_hex,
-                chunk_size=chunk_size,
-                data_length_byte_size=1,
-                zero=options.zero
-            )
+        for hex_bytes in queue_name_indicator_hex:
+            if len(hex_bytes) > 0 and hex_bytes.upper() in convert_hex(data):
+                if queue_name is not None:
+                    raise Exception(f"ERROR [1], QUEUE MESSAGE NOT FOUND FOR QUEUE NAME ({hex_bytes})")
+                (data, queue_name) = extract_unescaped_content(
+                    src=src,
+                    data=data,
+                    hex_bytes=hex_bytes,
+                    chunk_size=chunk_size,
+                    data_length_byte_size=1,
+                    zero=options.zero
+                )
 
         if len(queue_message_indicator_hex) > 0 and queue_message_indicator_hex.upper() in convert_hex(data):
+            if queue_message is not None:
+                raise Exception("ERROR [2], QUEUE NAME NOT FOUND FOR QUEUE MESSAGE")
             (data, queue_message) = extract_unescaped_content(
                 src=src,
                 data=data,
@@ -212,11 +216,9 @@ if __name__ == '__main__':
 
         if queue_message is not None:
             if queue_name is None:
-                raise Exception("ERROR, QUEUE NAME NOT FOUND FOR QUEUE MESSAGE")
-            print("")
-            print("==============================================================================")
-            print("")
-            print(queue_name, "||", queue_message)
+                raise Exception("ERROR [3], QUEUE NAME NOT FOUND FOR QUEUE MESSAGE")
+            print(f"queue_name = {queue_name}")
+            print(f"queue_message = {queue_message}")
             queue_name = None
             queue_message = None
 
