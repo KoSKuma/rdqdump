@@ -109,6 +109,29 @@ def convert_hex(string):
 #         pass
 
 
+def extract_unescaped_content(src, data, hex_bytes, chunk_size, data_length_byte_size, zero=False):
+    # where is the string in this chunk of data
+    hexdata = convert_hex(data)
+    data_pos = hexdata.find(hex_bytes.upper()) / 2
+    # where is the string in the file
+    data_address = (max(0, (src.tell() - chunk_size)) + data_pos)
+    # what do we print in the hexoutput
+    print_address = data_address
+    if zero:
+        # used to carve out a portion of a stream and save it via xxd -r
+        print_address = 0
+
+    # Find the length of the data
+    record_size = read_chunk(src, data_address + len(hex_bytes) / 2, data_length_byte_size)
+    rdq_entry_length = int(convert_hex(record_size), 16)
+    data = read_chunk(src, data_address + (len(hex_bytes) / 2) + data_length_byte_size, rdq_entry_length)
+    unescaped_data = data.decode('ascii', 'ignore')
+
+    if options.debug:
+        print(hexdump(data, byte_separator='', group_size=2, group_separator=' ', printable_separator='  ', address=print_address, line_size=16, address_format='%f'))
+
+    return (data, unescaped_data)
+
 if __name__ == '__main__':
     # search a rabbit mq rdq file for
     # potential amqp records:
@@ -157,63 +180,34 @@ if __name__ == '__main__':
     queue_name = None
     queue_message = None
 
+    queue_name_indicator_hex = options.hex_queue
+    queue_message_indicator_hex = options.hex
+
     while data:
         # print("")
         # print("")
         # print(data)
         # print(convert_hex(data))
-        hex_bytes = options.hex_queue
-        data_length_byte_size = 1
-        if len(hex_bytes) > 0 and hex_bytes.upper() in convert_hex(data):
-            # where is the string in this chunk of data
-            hexdata = convert_hex(data)
-            data_pos = hexdata.find(hex_bytes.upper()) / 2
-            # where is the string in the file
-            data_address = (max(0, (src.tell() - chunk_size)) + data_pos)
-            # what do we print in the hexoutput
-            print_address = data_address
-            if options.zero:
-                # used to carve out a portion of a stream and save it via xxd -r
-                print_address = 0
+        
+        if len(queue_name_indicator_hex) > 0 and queue_name_indicator_hex.upper() in convert_hex(data):
+            (data, queue_name) = extract_unescaped_content(
+                src=src,
+                data=data,
+                hex_bytes=queue_name_indicator_hex,
+                chunk_size=chunk_size,
+                data_length_byte_size=1,
+                zero=options.zero
+            )
 
-            # Find the length of the data
-            record_size = read_chunk(src, data_address + len(hex_bytes) / 2, data_length_byte_size)
-            rdq_entry_length = int(convert_hex(record_size), 16)
-            data = read_chunk(src, data_address + (len(hex_bytes) / 2) + data_length_byte_size, rdq_entry_length)
-            unescaped_data = data.decode('ascii', 'ignore')
-
-            queue_name = unescaped_data
-
-            if options.debug:
-                print(hexdump(data, byte_separator='', group_size=2, group_separator=' ', printable_separator='  ', address=print_address, line_size=16, address_format='%f'))
-
-        hex_bytes = options.hex
-        data_length_byte_size = 2
-        if len(hex_bytes) > 0 and hex_bytes.upper() in convert_hex(data):
-            #where is the string in this chunk of data
-            hexdata = convert_hex(data)
-            data_pos = hexdata.find(hex_bytes.upper()) / 2
-            #where is the string in the file
-            data_address = (max(0, (src.tell() - chunk_size)) + data_pos)
-            #what do we print in the hexoutput
-            print_address = data_address
-            if options.zero:
-                #used to carve out a portion of a stream and save it via xxd -r
-                print_address = 0
-
-            # Find the length of the data
-            record_size = read_chunk(src, data_address + len(hex_bytes)/2,  data_length_byte_size)
-            rdq_entry_length = int(convert_hex(record_size), 16)
-
-            # backup, get the chunk of data requested starting at the search hit.
-            # plus the hex search + the record length
-            data = read_chunk(src, data_address + (len(hex_bytes) / 2) + data_length_byte_size, rdq_entry_length)
-            unescaped_data = data.decode('ascii', 'ignore')
-
-            queue_message = unescaped_data
-            
-            if options.debug:
-                print(hexdump(data, byte_separator='', group_size=2, group_separator=' ', printable_separator='  ', address=print_address, line_size=16, address_format='%f'))
+        if len(queue_message_indicator_hex) > 0 and queue_message_indicator_hex.upper() in convert_hex(data):
+            (data, queue_message) = extract_unescaped_content(
+                src=src,
+                data=data,
+                hex_bytes=queue_message_indicator_hex,
+                chunk_size=chunk_size,
+                data_length_byte_size=2,
+                zero=options.zero
+            )
             count += 1
 
         if queue_message is not None:
@@ -222,7 +216,7 @@ if __name__ == '__main__':
             print("")
             print("==============================================================================")
             print("")
-            print(queue_name, queue_message)
+            print(queue_name, "||", queue_message)
             queue_name = None
             queue_message = None
 
