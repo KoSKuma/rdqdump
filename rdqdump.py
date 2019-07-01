@@ -19,7 +19,7 @@
 import os
 import sys
 import io
-from optparse import OptionParser
+from argparse import ArgumentParser
 import json
 
 
@@ -91,22 +91,20 @@ def convert_hex(string):
                     for character in string])
 
 
-# def save_data():
-#     try:
-#         if output:
-#             with open(output_file, "a") as out_file:
-#                 out_file.write(json.loads(unescaped_data) + '\n')
-#         else:
-#             # sys.stdout.write(json.loads(unescaped_data) + '\n')
-#             pass
+def save_data(output_file, queue_name, queue_message, file_location='output'):
+    try:
+        queue_message = json.loads(queue_message)
+    except:
+        pass
 
-#     except Exception as e:
-#         if output:
-#             with open(output_file, "a") as out_file:
-#                 out_file.write(unescaped_data + '\n')
-#         else:
-#             sys.stderr.write(unescaped_data + '\n')
-#         pass
+    line = {
+        'queue_name': queue_name,
+        'queue_message': queue_message
+    }
+
+    file_location = file_location.rstrip('/')
+    with open(f'{file_location}/{output_file}', 'a') as out_file:
+        out_file.write(json.dumps(line) + '\n')
 
 
 def extract_unescaped_content(src, data, hex_bytes, chunk_size, data_length_byte_size, zero=False):
@@ -138,24 +136,31 @@ if __name__ == '__main__':
     # by finding: 395f316c000000016d0000 , parsing the next 2 bytes as
     # record length and outputing the record to stdout
     #
-    parser = OptionParser()
-    parser.add_option("-b", dest='bytes', default=16, type="int", help="number of bytes to show per line")
-    parser.add_option("-s", dest='start', default=0, type="int", help="starting byte")
-    parser.add_option("-l", dest='length', default=16, type="int", help="length in bytes to dump")
-    parser.add_option("-r", dest='chunk', default=1024, type="int", help="length in bytes to read at a time")
-    parser.add_option("-f", dest='input', default="", help="input: filename")
-    parser.add_option("-t", dest='text', default="", help="text string to search for")
-    parser.add_option("-o", dest='output', help="output: filename")
+    parser = ArgumentParser(description="Process RabbitMQ persistent file storage (.rdq) and output to file or another RabbitMQ")
+    parser.add_argument("-b", dest='bytes', default=16, type=int, help="number of bytes to show per line")
+    parser.add_argument("-s", dest='start', default=0, type=int, help="starting byte")
+    parser.add_argument("-l", dest='length', default=16, type=int, help="length in bytes to dump")
+    parser.add_argument("-r", dest='chunk', default=1024, type=int, help="length in bytes to read at a time")
+    parser.add_argument("-f", dest='input', default='', help="input: filename")
+    parser.add_argument("-t", dest='text', default='', help="text string to search for")
+
+    # output related arguments
+    parser.add_argument("-o", dest='output', help="output: filename")
+    parser.add_argument("-q", dest='queue', help="config containing output queue credential")
 
     # this hex value worked for me, might work for you
     # to delimit the entries in a rabbitmq .rdq file
-    parser.add_option("-x", dest='hex', default="395f316c000000016d0000", help="hex string to search for queue message")
-    parser.add_option("-q", "--hex_queue", dest='hex_queue', default="65786368616E67656D000000006C000000016D000000,000865786368616E67656D000000", help="hex string to search for queue name")
-    parser.add_option("-c", dest='count', default=1, type="int", help="count of hits to find before stopping (0 for don't stop)")
-    parser.add_option("-d", "--debug", action="store_true", dest="debug", default=False, help="turn on debugging output")
-    parser.add_option("-z", "--zero", action="store_true", dest="zero", default=False, help="when printing output, count from zero rather than position hit was found")
+    parser.add_argument("-x", "--msg-hex", dest='hex', default="395f316c000000016d0000", help="hex string to search for queue message")
+    parser.add_argument("--hex_queue", dest='hex_queue', default="65786368616E67656D000000006C000000016D000000,000865786368616E67656D000000", help="hex string to search for queue name")
+    parser.add_argument("-c", dest='count', default=1, type=int, help="count of hits to find before stopping (0 for don't stop)")
 
-    (options, args) = parser.parse_args()
+    # debug related arguments
+    parser.add_argument("--dev", action='store_true', dest='dev_debug', default=False, help="Print debug message related to development process")
+    parser.add_argument("-d", "--debug", action='store_true', dest='debug', default=False, help="turn on debugging output")
+    parser.add_argument("-z", "--zero", action='store_true', dest='zero', default=False, help="when printing output, count from zero rather than position hit was found")
+
+    options = parser.parse_args()
+    dev_debug = options.dev_debug
 
     if os.path.exists(options.input):
         src = open(options.input, 'rb')
@@ -172,6 +177,12 @@ if __name__ == '__main__':
     else:
         output = False
 
+    if options.queue is not None:
+        queue_config_file = options.queue
+        queue = True
+    else:
+        queue = False
+
     data = read_chunk(src, options.start, chunk_size)
     if options.debug:
         print("[*] position: %d" % (src.tell()))
@@ -184,9 +195,11 @@ if __name__ == '__main__':
     queue_message_indicator_hex = options.hex
 
     while data:
-        # print("")
-        # print(data)
-        # print(convert_hex(data))
+        if dev_debug:
+            print("")
+            print(data)
+            print(convert_hex(data))
+            print("")
         
         for hex_bytes in queue_name_indicator_hex:
             if len(hex_bytes) > 0 and hex_bytes.upper() in convert_hex(data):
@@ -217,8 +230,15 @@ if __name__ == '__main__':
         if queue_message is not None:
             if queue_name is None:
                 raise Exception("ERROR [3], QUEUE NAME NOT FOUND FOR QUEUE MESSAGE")
-            print(f"queue_name = {queue_name}")
-            print(f"queue_message = {queue_message}")
+            
+            if (not queue) and (not output):
+                print(f"queue_name = {queue_name}")
+                print(f"queue_message = {queue_message}")
+            else:
+                if queue:
+                    pass
+                if output:
+                    save_data(output_file, queue_name, queue_message)
             queue_name = None
             queue_message = None
 

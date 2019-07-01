@@ -1,2 +1,7 @@
+.vscode
 env
 *.rdq
+output/*
+
+!.gitkeep
+!.gitignore
