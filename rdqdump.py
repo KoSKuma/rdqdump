@@ -21,6 +21,8 @@ import sys
 import io
 from argparse import ArgumentParser
 import json
+import yaml
+from helpers.rabbitmq import RabbitMQ
 
 
 def read_chunk(data, start, end):
@@ -178,7 +180,10 @@ if __name__ == '__main__':
         output = False
 
     if options.queue is not None:
-        queue_config_file = options.queue
+        with open(f'config/{options.queue}') as stream:
+            queue_config = yaml.safe_load(stream)['queue']
+        result_queue_connection = RabbitMQ(queue_config['user'], queue_config['password'], queue_config['host'], queue_config['port'])
+        result_queue_connection.connect_to_queue()
         queue = True
     else:
         queue = False
@@ -196,8 +201,10 @@ if __name__ == '__main__':
 
     while data:
         if dev_debug:
-            print("")
+            print("Data:")
             print(data)
+            print("")
+            print("Data (HEX):")
             print(convert_hex(data))
             print("")
         
@@ -232,15 +239,20 @@ if __name__ == '__main__':
                 raise Exception("ERROR [3], QUEUE NAME NOT FOUND FOR QUEUE MESSAGE")
             
             if (not queue) and (not output):
-                print(f"queue_name = {queue_name}")
-                print(f"queue_message = {queue_message}")
+                print(f"queue_name:\n{queue_name}\n")
+                print(f"queue_message:\n{queue_message}")
+                print("\n\n=====================================================================================\n\n")
             else:
                 if queue:
-                    pass
+                    result_queue_connection.create_queue(queue_name)
+                    result_queue_connection.publish_to_queue(queue_name, queue_message)
                 if output:
                     save_data(output_file, queue_name, queue_message)
             queue_name = None
             queue_message = None
+
+        if count % 1000 == 0:
+            print(f"Processed {count} messages.")
 
         if options.count != 0 and options.count <= count:
             sys.exit()
@@ -248,3 +260,5 @@ if __name__ == '__main__':
             data = read_chunk(src,src.tell(), chunk_size)
             if options.debug:
                 print("[*] position: %d" % (src.tell()))
+
+    print(f"\nFinish processing {count} messages from {options.input}.")
