@@ -1,0 +1,6 @@
+queue:
+  host: "127.0.0.1"
+  user: "queue_user"
+  password: "queue_pass"
+  port: 5672
+  port_management: 15672

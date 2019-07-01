@@ -1,7 +1,13 @@
-.vscode
+__pycache__
 env
-*.rdq
+
+.vscode
+
 output/*
+config/*
+dump/*
+*.rdq
 
 !.gitkeep
 !.gitignore
+!config/test.yml
