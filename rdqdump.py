@@ -271,6 +271,6 @@ if __name__ == '__main__':
                     dev_debug=options.dev_debug
                 )
                 processed_file_count += 1
-                print(f"Processed {processed_file_count}/{total_file_count} files.")
+                print(f"Processed {processed_file_count}/{total_file_count} files.\n")
         else:
             sys.stderr.write(f"Cannot find the specified folder '{folder_path}'\n")
