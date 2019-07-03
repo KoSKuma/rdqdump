@@ -133,6 +133,9 @@ def restore_rdq_data(
             )
             count += 1
 
+            if count % 1000 == 0:
+                print(f"- Processed {count} messages.")
+
         if queue_message is not None:
             if queue_name is None:
                 raise Exception("ERROR [3], QUEUE NAME NOT FOUND FOR QUEUE MESSAGE")
@@ -149,9 +152,6 @@ def restore_rdq_data(
                     save_data(output_file, queue_name, queue_message)
             queue_name = None
             queue_message = None
-
-        if count % 1000 == 0:
-            print(f"- Processed {count} messages.")
 
         if message_limit != 0 and message_limit <= count:
             sys.exit()
@@ -253,6 +253,8 @@ if __name__ == '__main__':
         folder_path = options.folder.rstrip('/')
         if os.path.exists(folder_path):
             rdq_list = list(filter(lambda file_name: file_name.endswith('.rdq'), os.listdir(folder_path)))
+            total_file_count = len(rdq_list)
+            processed_file_count = 0
             for rdq_file in rdq_list:
                 full_path = f"{folder_path}/{rdq_file}"
                 restore_rdq_data(
@@ -268,5 +270,7 @@ if __name__ == '__main__':
                     debug=options.debug,
                     dev_debug=options.dev_debug
                 )
+                processed_file_count += 1
+                print(f"Processed {processed_file_count}/{total_file_count} files.")
         else:
             sys.stderr.write(f"Cannot find the specified folder '{folder_path}'\n")
