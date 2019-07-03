@@ -81,10 +81,13 @@ def restore_rdq_data(
         output_file,
         queue,
         start_bytes=0,
+        delete_file=False,
         debug=False,
         dev_debug=False,
         zero=False
         ):
+    print(f"Start processing '{file_path}'")
+
     src, chunk_size = read_file(file_path, chunk)
 
     if debug:
@@ -93,8 +96,8 @@ def restore_rdq_data(
     count = 0
     queue_name = None
     queue_message = None
-
     data = read_chunk(src, start_bytes, chunk_size)
+
     while data:
         if dev_debug:
             print("Data:")
@@ -148,7 +151,7 @@ def restore_rdq_data(
             queue_message = None
 
         if count % 1000 == 0:
-            print(f"Processed {count} messages.")
+            print(f"- Processed {count} messages.")
 
         if message_limit != 0 and message_limit <= count:
             sys.exit()
@@ -157,7 +160,12 @@ def restore_rdq_data(
             if debug:
                 print("[*] position: %d" % (src.tell()))
 
-    print(f"\nFinish processing {count} messages from {file_path}.")
+    print(f"- Processed {count} messages.")
+    print(f"Finish processing {count} messages from {file_path}.\n")
+
+    if delete_file:
+        print(f"...Delete file '{file_path}'...\n")
+        os.remove(file_path)
 
 
 def read_file(file_path, chunk):
@@ -189,6 +197,7 @@ if __name__ == '__main__':
     # output related arguments
     parser.add_argument("-o", dest='output', help="output: filename")
     parser.add_argument("-q", dest='queue', help="config containing output queue credential")
+    parser.add_argument("--delete", action='store_true', dest='delete', default=False, help="input: folder path")
 
     # this hex value worked for me, might work for you
     # to delimit the entries in a rabbitmq .rdq file
@@ -205,6 +214,10 @@ if __name__ == '__main__':
 
     if options.input is None and options.folder is None:
         sys.stderr.write("No input file (-i) or folder (-f) specified\n")
+        sys.exit()
+
+    if options.input is not None and options.folder is not None:
+        sys.stderr.write("Please specify only either input file (-i) or folder (-f)\n")
         sys.exit()
 
     output_file = None
@@ -232,11 +245,11 @@ if __name__ == '__main__':
             output_file=output_file,
             queue=queue,
             start_bytes=options.start,
+            delete_file=options.delete,
             debug=options.debug,
             dev_debug=options.dev_debug
         )
-
-    if options.folder:
+    elif options.folder:
         folder_path = options.folder.rstrip('/')
         if os.path.exists(folder_path):
             rdq_list = list(filter(lambda file_name: file_name.endswith('.rdq'), os.listdir(folder_path)))
@@ -251,9 +264,9 @@ if __name__ == '__main__':
                     output_file=output_file,
                     queue=queue,
                     start_bytes=0,
+                    delete_file=options.delete,
                     debug=options.debug,
                     dev_debug=options.dev_debug
                 )
-            
         else:
             sys.stderr.write(f"Cannot find the specified folder '{folder_path}'\n")
