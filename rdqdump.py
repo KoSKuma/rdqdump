@@ -129,7 +129,7 @@ def restore_rdq_data(
                     data=data,
                     hex_bytes=hex_bytes,
                     chunk_size=chunk_size,
-                    data_length_byte_size=2,
+                    data_length_byte_size=4,
                     zero=zero
                 )
                 count += 1
@@ -203,7 +203,7 @@ if __name__ == '__main__':
 
     # this hex value worked for me, might work for you
     # to delimit the entries in a rabbitmq .rdq file
-    parser.add_argument("-x", "--msg-hex", dest='hex', default="395f316c000000016d0000,395f316c000000026d0000,395f316c000000016d0001,00046E6F6E656400046E6F6E656C000000016D0000,00046E6F6E656400046E6F6E656C000000016D0001", help="hex string to search for queue message")
+    parser.add_argument("-x", "--msg-hex", dest='hex', default="395f316c000000016d,395f316c000000026d,00046E6F6E656400046E6F6E656C000000016D", help="hex string to search for queue message")
     parser.add_argument("--hex_queue", dest='hex_queue', default="65786368616E67656D000000006C000000016D000000,000865786368616E67656D000000", help="hex string to search for queue name")
     parser.add_argument("-c", dest='count', default=1, type=int, help="count of hits to find before stopping (0 for don't stop)")
 
