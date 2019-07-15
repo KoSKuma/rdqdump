@@ -148,6 +148,7 @@ def restore_rdq_data(
             else:
                 if queue:
                     queue.create_queue(queue_name)
+                    json.loads(queue_message)
                     queue.publish_to_queue(queue_name, queue_message)
                 if output_file:
                     save_data(output_file, queue_name, queue_message)
